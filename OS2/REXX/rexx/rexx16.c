@@ -30,19 +30,39 @@
 // traps in most cases (Regina REXX requires bigger stack). So we execute
 // another process (rexx16.exe) and communicate with it via pipes.
 
+#if defined(__OSFREE__)
+#define OS2
+#define HAVE_STDLIB_H
+#undef  HAVE_CONFIG_H
+#include <ctype.h>
+#endif
+
+#if defined(HAVE_CONFIG_H)
+# include "config.h"
+#endif
+
 #define INCL_DOSPROCESS
 #define INCL_DOSERRORS
 #include <os2.h>
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+
+#if defined(HAVE_STDLIB_H)
+# include <stdlib.h>
+#endif
+
+#undef __USE_BSD
+#if defined(HAVE_STRING_H)
+# include <string.h>
+#endif
 
 #include "rexx.h"
 #include "stk.h"
 
-APIRET APIENTRY DosSelToFlat(ULONG addr);
-APIRET APIENTRY DosFlatToSel(ULONG addr);
+void LoadInterpreter( void );
+
+extern int Trace;
+extern int InterpreterIdx;
 
 void null(char *fmt, ...) {};
 
@@ -53,28 +73,45 @@ USHORT _Far16 _Pascal RXTRACERESET(
   APIRET rc;
 
   stkon();
-  debug("RXTRACESET\n");
+
+  log("%s\n", __FUNCTION__);
   rc = RexxResetTrace(pid, tid);
-  debug("rc=%lx\n", rc);
+  log("rc=%lx\n", rc);
+
   stkoff();
 
   return rc;
 }
 
 USHORT _Far16 _Pascal RXVAR(
-         PSHVBLOCK16 _Far16 PSHV16)              /* Pointer to list of SHVBLOCKs*/
+         SHVBLOCK16  * _Seg16 pshv16)              /* Pointer to list of SHVBLOCKs*/
 {
-  PSHVBLOCK PSHV;
+  PSHVBLOCK pshv;
+  PSHVBLOCK p;
   APIRET rc;
 
   stkon();
-  debug("RXVAR\n");
-  PSHV = (PSHVBLOCK)PSHV16;
-  // ...
 
-  rc = RexxVariablePool(PSHV);
+  log("%s\n", __FUNCTION__);
+  p = (PSHVBLOCK)pshv16;
+  pshv = (PSHVBLOCK)malloc(sizeof(SHVBLOCK));
+  
+  pshv->shvname.strlength = p->shvname.strlength;
+  pshv->shvname.strptr = (PSZ)p->shvname.strptr;
 
-  debug("rc=%lx\n", rc);
+  pshv->shvvalue.strlength = p->shvvalue.strlength;
+  pshv->shvvalue.strptr = (PSZ)p->shvvalue.strptr;
+
+  pshv->shvnamelen = p->shvnamelen;
+  pshv->shvvaluelen = p->shvvaluelen;
+  pshv->shvcode = p->shvcode;
+  pshv->shvret = p->shvret;
+
+  rc = RexxVariablePool(pshv);
+
+  free(pshv);
+  log("rc=%lx\n", rc);
+
   stkoff();
 
   return rc;
@@ -92,11 +129,8 @@ SHORT _Far16 _Pascal REXXSAA(
          PSHORT16     retc,                 /* Ret code from if numeric   */
          PRXSTRING16  retv )                /* Retvalue from the rexx proc*/
 {
-  //LONG         argcnt     = argc;
   PRXSTRING    a          = NULL;
   PRXSTRING    r;
-  //RXSTRING     args[1];
-  //PSZ          macroarg = "w=2+3";
   RXSTRING     bf[2];
   PRXSTRING    b          = NULL;
   PRXSYSEXIT   p          = NULL;
@@ -114,8 +148,9 @@ SHORT _Far16 _Pascal REXXSAA(
   int          i;
 
   stkon();
-  debug("REXXSAA\n");
-  debug("argc=%u\n", argc);
+
+  log("%s\n", __FUNCTION__);
+  log("argc=%u\n", argc);
 
   if (arg)
     a = (PRXSTRING) malloc (argc * sizeof(RXSTRING));
@@ -125,19 +160,19 @@ SHORT _Far16 _Pascal REXXSAA(
     if (a[i].strlength = r->strlength)
     {
       a[i].strptr = (PSZ)((PRXSTRING16)r)->strptr;
-      debug("argv[%lu]=%s\n", i, a[i].strptr);
+      log("argv[%lu]=%s\n", i, a[i].strptr);
     }
     else
     {
       a[i].strptr = NULL;
-      debug("argv[%lu]=(NULL)\n", i);
+      log("argv[%lu]=(NULL)\n", i);
     }
   }
 
   if (pth = (PSZ)path)
-    debug("path=%s\n", pth);
+    log("path=%s\n", pth);
   else
-    debug("path=(NULL)\n");
+    log("path=(NULL)\n");
 
   if (buf != NULL)
   {
@@ -157,21 +192,21 @@ SHORT _Far16 _Pascal REXXSAA(
   else
     b = NULL;
 
-  debug("buf=%lx\n", b);
+  log("buf=%lx\n", b);
 
   if (e)
-    debug("env=%s\n", e);
+    log("env=%s\n", e);
   else
-    debug("env=(NULL)\n");
+    log("env=(NULL)\n");
 
-  debug("type=%x\n", type);
-  debug("sysex=%lx\n", sysex);
+  log("type=%x\n", type);
+  log("sysex=%lx\n", sysex);
 
   // count the number of elements in sysexit array
   // not sure if it is correct
   for (; s; s++, ulSysexNum++) ;
 
-  debug("ulSysexNum=%lu\n", ulSysexNum);
+  log("ulSysexNum=%lu\n", ulSysexNum);
 
   // create an array of 32-bit RXSYSEXIT structures
   if (sysex)
@@ -184,27 +219,16 @@ SHORT _Far16 _Pascal REXXSAA(
     p[i].sysexit_code = q->sysexit_code;
 
     if (p[i].sysexit_name)
-      debug("sysexit[%lu].sysexit_name=%s\n",  i, p[i].sysexit_name);
+      log("sysexit[%lu].sysexit_name=%s\n",  i, p[i].sysexit_name);
     else
-      debug("sysexit[%lu].sysexit_name=(NULL)\n",  i);
+      log("sysexit[%lu].sysexit_name=(NULL)\n",  i);
 
-    debug("sysexit[%lu].sysexit_code=%lx\n", i, p[i].sysexit_code);
+    log("sysexit[%lu].sysexit_code=%lx\n", i, p[i].sysexit_code);
   }
 
-  debug("calling RexxStart\n");
-
-  //if (argcnt == 0)
-  //  argcnt = 1;
-
-  //if ((type == RXCOMMAND) && (argcnt > 1))
-  //  argcnt = 1;
+  log("calling RexxStart\n");
 
   MAKERXSTRING(retvar, retbuf, sizeof(retbuf));
-  //MAKERXSTRING(args[0], macroarg, strlen(macroarg));
-
-  //__asm {
-  //  int 3
-  //}
 
   rc = RexxStart(argc,
                  a,
@@ -216,22 +240,17 @@ SHORT _Far16 _Pascal REXXSAA(
                  &ret,
                  &retvar);
 
-  //__asm {
-  //  int 3
-  //}
-
-  debug("RexxStart returned\n");
+  log("RexxStart returned\n");
 
   *retc = ret;
   retv->strlength = retvar.strlength;
   retv->strptr    = (PCH16)retvar.strptr;
 
-  debug("rc=%lx\n", rc);
+  log("rc=%lx\n", rc);
 
   if (a) free(a);
   if (p) free(p);
 
-  debug("memory released\n");
   stkoff();
 
   return rc;
@@ -239,15 +258,17 @@ SHORT _Far16 _Pascal REXXSAA(
 
 
 USHORT _Far16 _Pascal RXHALTSET(
-         LONG PID,                         /* Process Id                  */
-         LONG TID)                        /* Thread Id                   */
+         LONG pid,                        /* Process Id                  */
+         LONG tid)                        /* Thread Id                   */
 {
   APIRET rc;
 
   stkon();
-  debug("REXXSETHALT\n");
-  rc = RexxSetHalt(PID, TID);
-  debug("rc=%lx\n", rc);
+
+  log("%s\n", __FUNCTION__);
+  rc = RexxSetHalt(pid, tid);
+  log("rc=%lx\n", rc);
+
   stkoff();
 
   return rc;
@@ -255,30 +276,37 @@ USHORT _Far16 _Pascal RXHALTSET(
 
 
 USHORT _Far16 _Pascal RXTRACESET(
-         LONG PID,                         /* Process Id                  */
-         LONG TID)                        /* Thread Id                   */
+         LONG pid,                        /* Process Id                  */
+         LONG tid)                        /* Thread Id                   */
 {
   APIRET rc;
 
   stkon();
-  debug("REXXSETTRACE\n");
-  rc = RexxSetTrace(PID, TID);
-  debug("rc=%lx\n", rc);
+
+  log("%s\n", __FUNCTION__);
+  rc = RexxSetTrace(pid, tid);
+  log("rc=%lx\n", rc);
+
   stkoff();
 
   return rc;
 }
 
+#if 1
 
-USHORT _Far16 _Pascal RXBREAKCLEANUP(VOID)
+USHORT _Far16 _Pascal RXBREAKCLEANUP(void)
 {
   APIRET rc;
 
   stkon();
-  debug("RXBREAKCLEANUP\n");
+
+  log("%s\n", __FUNCTION__);
   rc = RexxBreakCleanup();
-  debug("rc=%lx\n", rc);
+  log("rc=%lx\n", rc);
+
   stkoff();
 
   return rc;
 }
+
+#endif

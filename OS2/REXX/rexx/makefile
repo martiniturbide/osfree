@@ -10,10 +10,12 @@ PROJ = rexx
 TRGT = $(PROJ).dll
 DESC = Classic REXX
 srcfiles     = $(p)rexx$(e) $(p)rexx16$(e) $(p)stk$(e)
-ADD_COPT     = -i=. -sg -of+
-ADD_LINKOPT  = segment   type DATA nonshared lib clib3r.lib,math387r.lib,emu387.lib
+# ADD_COPT     = -dHAVE_CONFIG_H -i=. -i=$(MYDIR)..$(SEP)interp -sg -of+ -bd -3s
+ADD_COPT     = -i=. -sg -of+ -bd -3s
+ADD_LINKOPT  = segment   type DATA nonshared
+NOLIBS       = 1
 DLL          = 1
-DLLOPT       = initinstance
+DLLOPT       = initinstance terminstance
 OPTIONS      = manyautodata, caseexact, heapsize=40960, start=dll_initterm
 EXPORTS      = RexxStart.1, &
                RexxVariablePool.2, &

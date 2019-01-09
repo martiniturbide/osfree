@@ -2,14 +2,21 @@
 
 PROJ = rexxapi
 TRGT = $(PROJ).dll
+TARGETS = $(PATH)wrappers.h $(PATH)$(TRGT)
 DESC = REXX API forwarder for Regina
-srcfiles     = $(p)rexxapi$(e) $(p)rexxapi16$(e) $(p)stk$(e)
-ADD_COPT     = -dHAVE_CONFIG_H -i=. -i=$(MYDIR)..$(SEP)interp -i=$(PATH) -sg -of+
-ADD_LINKOPT  = segment   type DATA nonshared lib clib3r.lib,math387r.lib,emu387.lib
+srcfiles     = $(p)rexxapi$(e) $(p)rexxque$(e) $(p)rexxapi16$(e) $(p)stk$(e)
+# number of 16-bit subcommand wrappers (see rexxapi16.c)
+NUMWRAP = 1024
+ADD_COPT     = -dSUBCOM_COUNT=$(NUMWRAP) -i=. -i=$(PATH) -i=$(MYDIR)..$(SEP)rexxinit -sg -of+ -bd -3s
+# ADD_COPT     = -dSUBCOM_COUNT=$(NUMWRAP) -dHAVE_CONFIG_H -i=. -i=$(MYDIR)..$(SEP)interp -i=$(PATH) -sg -of+ -bd -3s
+ADD_LINKOPT  = segment   type DATA nonshared
 DLL          = 1
-DLLOPT       = initinstance
+NOLIBS       = 1
+DLLOPT       = initinstance terminstance
 OPTIONS      = manyautodata, caseexact, heapsize=40960, start=dll_initterm
 STACKSIZE    = 81920
+IMPORTS      = &
+    DOSGETINFOSEG  DOSCALLS.8
 EXPORTS      = &
     RexxCreateQueue.1, &
     RexxDeleteQueue.2, &
@@ -36,11 +43,11 @@ EXPORTS      = &
     RexxReorderMacro.27, &
     RexxSaveMacroSpace.28, &
 # Undocumented IBM Classic REXX functions
-#    RexxLoadSubcom.10, &
-#    RexxCallExit.15, &
-#    RexxCallSubcom.16, &
-#    RexxCallFunction.21, &
-#    RexxExecuteMacroFunction.29, &
+    RexxLoadSubcom.10, &
+    RexxCallExit.15, &
+    RexxCallSubcom.16, &
+    RexxCallFunction.21, &
+    RexxExecuteMacroFunction.29, &
 # Regina extensions (export without ordinals)
 #    RexxAllocateMemory, &
 #    RexxFreeMemory, &
@@ -50,7 +57,7 @@ EXPORTS      = &
 # 16bit versions of calls
     RXMACROLOAD.30 RESIDENT, &
     RXMACROSAVE.31 RESIDENT, &
-    RXSUBCOMLOAD.32 RESIDENT, &
+#    RXSUBCOMLOAD.32 RESIDENT, &
     RXMACRODROP.33 RESIDENT, &
     RXEXITQUERY.34 RESIDENT, &
     RXMACROERASE.35 RESIDENT, &
@@ -58,10 +65,10 @@ EXPORTS      = &
     RXMACROQUERY.37 RESIDENT, &
     RXMACROCHANGE.38 RESIDENT, &
     RXSUBCOMQUERY.39 RESIDENT, &
-    RXFUNCTIONCALL.40 RESIDENT, &
+#    RXFUNCTIONCALL.40 RESIDENT, &
     RXEXITREGISTER.41 RESIDENT, &
     RXMACROREORDER.42 RESIDENT, &
-    RXSUBCOMEXECUTE.43 RESIDENT, &
+#    RXSUBCOMEXECUTE.43 RESIDENT, &
     RXSUBCOMREGISTER.44 RESIDENT, &
     RXFUNCTIONQUERY.45 RESIDENT, &
     RXFUNCTIONREGISTER.46 RESIDENT, &
@@ -69,14 +76,9 @@ EXPORTS      = &
     RXFUNCTIONDEREGISTER.48 RESIDENT
 
 DEST         = os2$(SEP)dll
-#UNI2H        = 1
-
-# number of 16-bit subcommand wrappers (see rexxapi16.c)
-NUMWRAP = 1024
+UNI2H        = 1
 
 .h: $(PATH)
-
-all: $(PATH)wrappers.h
 
 !include $(%ROOT)/mk/appsos2_cmd.mk
 

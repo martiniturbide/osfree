@@ -1,10 +1,10 @@
-#define EXTRA_STACK_SIZE 0x12000
+#define EXTRA_STACK_SIZE 0x400000
 
 extern char *extra_stack;
 extern char *old_stack;
 
-APIRET APIENTRY init (void);
-APIRET APIENTRY term (void);
+APIRET APIENTRY init2(void);
+APIRET APIENTRY term2(void);
 
 static inline void stkon (void)
 {
